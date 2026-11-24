@@ -12,7 +12,9 @@
   textarea { width: 100%; box-sizing: border-box; padding: .6rem; font: inherit; }
   button { background: #23543b; color: white; border: 0; border-radius: .4rem; padding: .55rem 1rem; font: inherit; cursor: pointer; }
   ul { list-style: none; padding: 0; }
-  li { margin-bottom: .5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  li { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: .5rem; }
+  .entry-text { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .delete-entry { background: white; color: #8a3025; border: 1px solid #cfa8a0; }
 </style>
 </head>
 <body>
@@ -47,12 +49,45 @@
   }
 
   function render(entries) {
-    list.replaceChildren(...entries.map(entry => {
+    list.replaceChildren(...entries.map((entry, index) => {
       const item = document.createElement('li');
-      item.textContent = entry;
+      const text = document.createElement('span');
+      text.className = 'entry-text';
+      text.textContent = entry;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'delete-entry';
+      remove.textContent = '刪除';
+      remove.setAttribute('aria-label', `刪除第 ${index + 1} 筆紀錄`);
+      remove.addEventListener('click', () => deleteEntry(entries, index));
+      item.append(text, remove);
       return item;
     }));
     empty.hidden = entries.length > 0;
+  }
+
+  function deleteEntry(displayedEntries, index) {
+    try {
+      const entries = readEntries();
+      if (entries.length !== displayedEntries.length ||
+          entries.some((entry, position) => entry !== displayedEntries[position])) {
+        render(entries);
+        status.textContent = '紀錄已在另一個分頁更新。請確認後再刪除。';
+        input.focus();
+        return;
+      }
+
+      entries.splice(index, 1);
+      localStorage.setItem(storageKey, JSON.stringify(entries));
+      render(entries);
+    } catch {
+      status.textContent = '刪除失敗。請確認瀏覽器允許網站儲存資料，再試一次。';
+      return;
+    }
+
+    status.textContent = '已刪除紀錄。';
+    (list.children[index]?.querySelector('button') ??
+      list.lastElementChild?.querySelector('button') ?? input).focus();
   }
 
   try {
