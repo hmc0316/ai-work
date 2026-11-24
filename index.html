@@ -13,7 +13,10 @@
   button { background: #23543b; color: white; border: 0; border-radius: .4rem; padding: .55rem 1rem; font: inherit; cursor: pointer; }
   ul { list-style: none; padding: 0; }
   li { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: .5rem; }
+  li > button { flex-shrink: 0; }
   .entry-text { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .entry-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .entry-editor { width: 100%; min-width: 0; border: 0; padding: 0; }
   .delete-entry { background: white; color: #8a3025; border: 1px solid #cfa8a0; }
 </style>
 </head>
@@ -60,17 +63,86 @@
       remove.textContent = '刪除';
       remove.setAttribute('aria-label', `刪除第 ${index + 1} 筆紀錄`);
       remove.addEventListener('click', () => deleteEntry(entries, index));
-      item.append(text, remove);
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = '編輯';
+      edit.setAttribute('aria-label', `編輯第 ${index + 1} 筆紀錄`);
+      edit.addEventListener('click', () => showEditor(item, entries, index));
+      item.append(text, edit, remove);
       return item;
     }));
     empty.hidden = entries.length > 0;
   }
 
+  function entriesChanged(entries, displayedEntries) {
+    return entries.length !== displayedEntries.length ||
+      entries.some((entry, index) => entry !== displayedEntries[index]);
+  }
+
+  function showEditor(item, displayedEntries, index) {
+    const editor = document.createElement('form');
+    editor.className = 'entry-editor';
+    const field = document.createElement('textarea');
+    field.rows = 3;
+    field.required = true;
+    field.value = displayedEntries[index];
+    field.setAttribute('aria-label', `編輯第 ${index + 1} 筆紀錄的文字`);
+
+    const actions = document.createElement('div');
+    actions.className = 'entry-actions';
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.textContent = '儲存';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = '取消';
+    const previousContent = Array.from(item.children);
+    cancel.addEventListener('click', () => {
+      item.replaceChildren(...previousContent);
+      status.textContent = '';
+      item.querySelector('button').focus();
+    });
+    editor.addEventListener('submit', event => {
+      event.preventDefault();
+      const entry = field.value.trim();
+      if (!entry) {
+        status.textContent = '請輸入紀錄內容。';
+        field.focus();
+        return;
+      }
+
+      try {
+        const entries = readEntries();
+        if (entriesChanged(entries, displayedEntries)) {
+          render(entries);
+          status.textContent = '紀錄已在另一個分頁更新。請確認後再編輯。';
+          input.focus();
+          return;
+        }
+
+        entries[index] = entry;
+        localStorage.setItem(storageKey, JSON.stringify(entries));
+        render(entries);
+      } catch {
+        status.textContent = '儲存失敗。請確認瀏覽器允許網站儲存資料，再試一次。';
+        return;
+      }
+
+      status.textContent = '已儲存修改。';
+      list.children[index].querySelector('button').focus();
+    });
+
+    actions.append(save, cancel);
+    editor.append(field, actions);
+    item.replaceChildren(editor);
+    status.textContent = '';
+    field.focus();
+  }
+
   function deleteEntry(displayedEntries, index) {
     try {
       const entries = readEntries();
-      if (entries.length !== displayedEntries.length ||
-          entries.some((entry, position) => entry !== displayedEntries[position])) {
+      if (entriesChanged(entries, displayedEntries)) {
         render(entries);
         status.textContent = '紀錄已在另一個分頁更新。請確認後再刪除。';
         input.focus();
@@ -86,8 +158,8 @@
     }
 
     status.textContent = '已刪除紀錄。';
-    (list.children[index]?.querySelector('button') ??
-      list.lastElementChild?.querySelector('button') ?? input).focus();
+    (list.children[index]?.querySelector('.delete-entry') ??
+      list.lastElementChild?.querySelector('.delete-entry') ?? input).focus();
   }
 
   try {
